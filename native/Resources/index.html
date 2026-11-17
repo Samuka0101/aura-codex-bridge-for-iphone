@@ -1,0 +1,121 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;color-scheme:light dark;--yellow:#ffd60a;--paper:#fff;--ink:#171717;--line:#d7d7d7;--bubble:#f2f2f7}@media(prefers-color-scheme:dark){:root{--paper:#000;--ink:#f5f5f7;--line:#2c2c2e;--bubble:#1c1c1e}}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink)}main{height:100dvh;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom)}header{padding:10px 2px 12px;border-bottom:1px solid var(--line)}header button{border:0;background:none;color:#c28b00;font-size:17px;padding:4px 0}h1{font-size:34px;margin:12px 0 2px;font-weight:750}small{color:#8e8e93}#chat{flex:1;overflow:auto;padding:16px 0;display:flex;flex-direction:column;gap:11px}article{white-space:pre-wrap;line-height:1.38;padding:11px 13px;border-radius:15px;max-width:89%}.aura{background:var(--bubble);align-self:flex-start}.user{background:var(--yellow);color:#171717;align-self:flex-end}.confirm{background:#fff3b0;color:#171717;align-self:flex-start}.actions{display:flex;gap:8px;margin-top:9px}.actions button{border:0;border-radius:10px;padding:9px 12px;background:#ffcc00;color:#171717;font-weight:650}.actions .no{background:#ddd}form{display:flex;align-items:flex-end;gap:8px;border-top:1px solid var(--line);padding:10px 0}textarea{flex:1;resize:none;max-height:110px;border:1px solid var(--line);border-radius:18px;background:var(--paper);color:var(--ink);font:inherit;padding:10px 13px}form>button{border:0;border-radius:50%;width:38px;height:38px;background:var(--yellow);color:#171717;font-size:22px;font-weight:bold}dialog{width:88%;border:0;border-radius:15px;background:var(--paper);color:var(--ink);padding:20px;box-shadow:0 12px 50px #0007}dialog input{width:100%;font-size:24px;letter-spacing:6px;text-align:center;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);margin:8px 0 14px}dialog button{width:100%;padding:11px;border:0;border-radius:10px;background:var(--yellow);font-weight:700}
+#server-url{font-size:16px;letter-spacing:normal;text-align:left}</style></head><body><main><header><button id="settings">‹ Conexão</button><h1>Aura</h1><small id="status">pronta</small></header><section id="chat"><article class="aura">Configure a conexão com o computador para começar.</article></section><form id="form"><textarea id="message" rows="1" placeholder="Nova mensagem"></textarea><button>↑</button></form></main><dialog id="login"><h2>Conectar</h2><label for="server-url">Endereço do servidor</label><input id="server-url" type="url" placeholder="http://ENDERECO:8787" autocapitalize="off"><p>Código mostrado no computador:</p><input id="code" inputmode="numeric" maxlength="6"><button id="connect">Conectar</button></dialog><script>
+const chat = document.querySelector('#chat');
+const form = document.querySelector('#form');
+const input = document.querySelector('#message');
+const login = document.querySelector('#login');
+const serverUrl = document.querySelector('#server-url');
+const code = document.querySelector('#code');
+const status = document.querySelector('#status');
+
+let apiOrigin = localStorage.auraApi || '';
+let access = localStorage.auraCode || '';
+let sessionId = localStorage.auraSession || '';
+
+function showConnection() {
+    serverUrl.value = apiOrigin;
+    code.value = access;
+    login.showModal();
+}
+
+document.querySelector('#settings').onclick = showConnection;
+document.querySelector('#connect').onclick = () => {
+    try {
+        const address = new URL(serverUrl.value.trim());
+        if (!['http:', 'https:'].includes(address.protocol) || address.username || address.password) {
+            throw Error('Informe um endereço HTTP ou HTTPS.');
+        }
+        if (!/^\d{6}$/.test(code.value)) throw Error('Informe o código de seis números.');
+        if (address.origin !== apiOrigin || code.value !== access) {
+            sessionId = '';
+            localStorage.removeItem('auraSession');
+        }
+        apiOrigin = address.origin;
+        access = code.value;
+        localStorage.auraApi = apiOrigin;
+        localStorage.auraCode = access;
+        login.close();
+        status.textContent = 'pronta';
+    } catch (error) {
+        bubble(error.message);
+        login.close();
+    }
+};
+
+if (!apiOrigin || !access) showConnection();
+
+function bubble(text, className = 'aura') {
+    const element = document.createElement('article');
+    element.className = className;
+    element.textContent = text;
+    chat.append(element);
+    chat.scrollTop = chat.scrollHeight;
+    return element;
+}
+
+async function api(path, data) {
+    const response = await fetch(apiOrigin + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Aura-Code': access },
+        body: JSON.stringify(data)
+    });
+    const result = await response.json();
+    if (!response.ok) throw Error(result.error || 'Erro');
+    return result;
+}
+
+function show(result) {
+    if (result.sessionId) {
+        sessionId = result.sessionId;
+        localStorage.auraSession = sessionId;
+    }
+    if (!result.confirmation) {
+        bubble(result.text || 'Pronto.');
+        return;
+    }
+
+    const message = bubble(result.text, 'confirm');
+    const buttons = document.createElement('div');
+    buttons.className = 'actions';
+    const confirm = document.createElement('button');
+    confirm.textContent = 'Confirmar';
+    const cancel = document.createElement('button');
+    cancel.textContent = 'Cancelar';
+    cancel.className = 'no';
+    buttons.append(cancel, confirm);
+    message.append(buttons);
+
+    for (const [button, approve] of [[cancel, false], [confirm, true]]) {
+        button.onclick = async () => {
+            confirm.disabled = cancel.disabled = true;
+            try {
+                show(await api('/api/confirm', { id: result.confirmation.id, approve }));
+            } catch (error) {
+                bubble(error.message);
+            }
+        };
+    }
+}
+
+form.onsubmit = async (event) => {
+    event.preventDefault();
+    if (!apiOrigin || !access) {
+        showConnection();
+        return;
+    }
+    const message = input.value.trim();
+    if (!message) return;
+
+    bubble(message, 'user');
+    input.value = '';
+    status.textContent = 'pensando…';
+    try {
+        show(await api('/api/chat', { message, sessionId }));
+        status.textContent = 'conectada';
+    } catch (error) {
+        bubble('Não consegui falar com o computador: ' + error.message);
+        status.textContent = 'sem conexão';
+    }
+};
+</script></body></html>

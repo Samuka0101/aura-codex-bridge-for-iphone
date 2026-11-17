@@ -1,0 +1,9 @@
+Package: com.example.aura
+Name: Aura
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Assistente local do iPhone conectado ao Codex.
+Maintainer: Samuka0101
+Author: Samuka0101
+Section: Applications
+Depends: firmware (>= 15.0)

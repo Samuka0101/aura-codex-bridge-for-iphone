@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "reply": { "type": "string" },
+    "action": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "enum": ["none", "iphone_status", "list_tweak_preferences", "read_tweak_preferences", "set_tweak_preference", "respring", "reboot_userspace"] },
+        "domain": { "type": "string" },
+        "key": { "type": "string" },
+        "value": { "type": "string" },
+        "value_type": { "type": "string", "enum": ["", "string", "bool", "int", "float"] }
+      },
+      "required": ["name", "domain", "key", "value", "value_type"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["reply", "action"],
+  "additionalProperties": false
+}
